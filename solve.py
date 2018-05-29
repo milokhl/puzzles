@@ -1,6 +1,6 @@
 # Solving Martin's Menace
 
-import math
+import math, time
 import numpy as np
 from matplotlib import pyplot as plt
 from shapely.geometry import box, Polygon
@@ -10,7 +10,6 @@ from descartes import PolygonPatch
 
 class Piece(object):
 	def __init__(self, poly):
-		self.valid_poses = [] # (x, y, theta) that fit on board.
 		self.original = poly
 		self.polygon = poly
 
@@ -90,7 +89,9 @@ class Board(object):
 			self.poses = self.poses[:ii+1]
 
 
-def solve(pieces):
+def solve(pieces, plot=False, print_lvl=0):
+	P0, P1, P2, P3 = pieces
+
 	board = Board()
 
 	# Create pose discretization.
@@ -104,7 +105,7 @@ def solve(pieces):
 			for t in thetas:
 				poses_all.append((x, y, t))
 
-	print('Made all poses!')
+	print('[INFO] Made all poses: %d!' % len(poses_all))
 
 	poses_q1 = []
 	for x in xs[:len(xs)//2]:
@@ -112,41 +113,59 @@ def solve(pieces):
 			for t in thetas:
 				poses_q1.append((x, y, t))
 
-	print('Made poses in quadrant!')
+	# Precompute allowed poses for each piece (inside of the board).
+	valid_poses = {}
+	for i, P in enumerate(pieces):
+		if i not in valid_poses: valid_poses[i] = []
+		for pose in poses_all:
+			P.transform(pose)
+			if board.boundary.contains(P.polygon):
+				valid_poses[i].append(pose)
+		print('[INFO] Valid for piece %d: %d' % (i, len(valid_poses[i])))
 
-	P0, P1, P2, P3 = pieces
+	poses_q1_valid = []
+	for pose in poses_q1[:]:
+		P0.transform(pose)
+		if board.boundary.contains(P0.polygon):
+			poses_q1_valid.append(pose)
+	print('[INFO] Valid for P0 in Q1: %d' % len(poses_q1_valid))
 
-	for pose0 in poses_q1:
-		# print('Pose0:', pose0)
+	total_config = len(poses_q1_valid) * len(valid_poses[1]) * len(valid_poses[2]) * len(valid_poses[3])
+	print('[INFO] Possible configurations: %d' % total_config)
+
+	last_time_P0 = time.time()
+	for idx0, pose0 in enumerate(poses_q1_valid):
 		# Place P0 (only need to consider a single quadrant).
+		if print_lvl >= 0: print('[PROGRESS] Trying pose %d/%d for P0. (last=%f sec)' % \
+			(idx0, len(poses_q1_valid), time.time() - last_time_P0))
+		last_time_P0 = time.time()
 		board.clear(-1)
 		success0 = board.place(P0, pose0, allow_overlap=True)
-
-		board.plot()
+		if plot: board.plot()
 
 		if success0:
 			# Place P1.
-			for pose1 in poses_all:
-				# print('Pose1:', pose1)
+			for idx1, pose1 in enumerate(valid_poses[1]):
+				if print_lvl >= 1: print('[PROGRESS] Trying pose %d/%d for P1.' % (idx1, len(valid_poses[1])))
 				board.clear(0)
 				success1 = board.place(P1, pose1, allow_overlap=True)
-
-				board.plot()
+				if plot: board.plot()
 
 				if success1:
 					# Place P2.
-					for pose2 in poses_all:
-						success2 = board.place(P2, pose2, allow_overlap=True)
-
+					for idx2, pose2 in enumerate(valid_poses[2]):
+						if print_lvl >= 2: print('[PROGRESS] Trying pose %d/%d for P2.' % (idx2, len(valid_poses[2])))
 						board.clear(1)
+						success2 = board.place(P2, pose2, allow_overlap=True)
+						if plot: board.plot()
 
 						if success2:
 							# Place P3.
-							for pose3 in poses_all:
+							for idx3, pose3 in enumerate(valid_poses[3]):
+								if print_lvl >= 3: print('[PROGRESS] Trying pose %d/%d for P3.' % (idx3, len(valid_poses[3])))
 								board.clear(2)
 								success3 = board.place(P3, pose3, allow_overlap=True)
-
-								board.plot()
+								if plot: board.plot()
 
 								if success3: # Win!
 									return (True, board)
@@ -189,15 +208,12 @@ if __name__ == '__main__':
 
 	pieces = [Piece(poly1), Piece(poly2), Piece(poly3), Piece(poly4)]
 
-	# b = Board()
-	# b.place(Piece(poly4), (0, 0, 0))
-	# b.plot()
-
 	success, final_board = solve(pieces)
 
 	if success:
 		print('SUCCESS!')
 		print(final_board)
 		final_board.plot()
+		plt.show()
 	else:
 		print('NONE FOUND')
