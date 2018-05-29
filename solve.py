@@ -1,6 +1,6 @@
 # Solving Martin's Menace
 
-import math, time
+import math, time, json
 import numpy as np
 from matplotlib import pyplot as plt
 from shapely.geometry import box, Polygon
@@ -52,6 +52,16 @@ class Board(object):
 
 		self.ax.add_collection(PatchCollection(patches, match_original=True))
 		plt.pause(dt)
+
+	def save(self):
+		savedict = {
+			'width': self.width,
+			'height': self.height,
+			'pieces_tf': [str(piece.polygon) for piece in self.pieces],
+			'poses': self.poses
+		}
+		with open('board.json', 'w') as f:
+			f.write(json.dumps(savedict, indent=2))
 
 	def place(self, piece, pose, allow_overlap=False):
 		"""
@@ -160,6 +170,7 @@ def solve(pieces, plot=False, print_lvl=0):
 						if plot: board.plot()
 
 						if success2:
+							board.save()
 							# Place P3.
 							for idx3, pose3 in enumerate(valid_poses[3]):
 								if print_lvl >= 3: print('[PROGRESS] Trying pose %d/%d for P3.' % (idx3, len(valid_poses[3])))
